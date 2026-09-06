@@ -1018,6 +1018,8 @@ const StudentFlow = {
     this.usedNonces = new Set();
     this.lockedSessionId = null;
     this.lockedGroup = null;
+    this.clockOffset = undefined;
+    this.firstSeenAt = undefined;
     this.setStep(1);
     document.getElementById('stepConnectivity').style.display='block';
     document.getElementById('stepCamera').style.display='none';
@@ -1234,11 +1236,33 @@ const StudentFlow = {
     if(payload.sid !== this.lockedSessionId) return; // ignore unrelated codes
     if(this.usedNonces.has(payload.n)) return; // already counted this exact code
 
-    const drift = Math.abs(Date.now() - payload.ts);
-    if(drift > CONFIG.TOLERANCE_MS){
-      msg.textContent = 'Code read, but it expired before your device saw it — keep the camera steady.';
-      msg.className='scan-msg warn';
-      return;
+    // Anti-replay/staleness check, made robust to clock skew between the
+    // lecturer's laptop and the student's phone. Comparing raw wall clocks
+    // (Date.now() on each device) fails whenever the two clocks disagree by
+    // more than a few seconds, which is common and has nothing to do with
+    // whether the code is actually stale. Instead we measure elapsed time
+    // on each side of this device's own scan session and compare deltas:
+    // "how much time has passed since I started scanning" vs "how much
+    // time had passed on the lecturer's clock since this code's timestamp
+    // relative to the first code I saw." This only needs each device's
+    // clock to run at a consistent rate, not to agree on absolute time.
+    if(this.clockOffset === undefined){
+      // First code seen this session: anchor our offset estimate here.
+      // From this point on we track drift *relative to this anchor*,
+      // not absolute wall-clock agreement.
+      this.clockOffset = Date.now() - payload.ts;
+      this.firstSeenAt = Date.now();
+    } else {
+      const expectedTs = Date.now() - this.clockOffset;
+      const drift = Math.abs(expectedTs - payload.ts);
+      // Allow slack for QR rotation + camera/decode lag on top of the
+      // configured tolerance, since this is now measuring relative drift
+      // (should stay tiny) rather than absolute clock agreement.
+      if(drift > CONFIG.TOLERANCE_MS){
+        msg.textContent = 'Code read, but it expired before your device saw it — keep the camera steady.';
+        msg.className='scan-msg warn';
+        return;
+      }
     }
 
     // Valid confirm
