@@ -1066,9 +1066,8 @@ const StudentFlow = {
   },
 
   onNetChange(isOnline){
-    if(!this.active) return;
     // Only relevant during the connectivity step
-    if(document.getElementById('stepConnectivity').style.display !== 'none'){
+    if(this.active && document.getElementById('stepConnectivity').style.display !== 'none'){
       this.updateConnUI();
       if(isOnline){
         this.cancelCountdown();
@@ -1076,16 +1075,21 @@ const StudentFlow = {
       }else{
         this.startCountdown();
       }
-    } else {
-      // During/after camera step: reconnecting triggers auto-sync of pending records
-      if(isOnline && App.currentStudent){
-        Backend.syncPending(App.currentStudent.studentId).then(count=>{
-          if(count>0){
-            toast(`Synced ${count} attendance record${count>1?'s':''} to the server`);
-            this.updateSyncBadge();
-          }
-        });
-      }
+      return;
+    }
+    // After the camera step (including after a successful finish()), keep
+    // listening for reconnection so pending records still sync. finish()
+    // sets this.active=false as soon as the scan flow completes, but that
+    // must not stop future 'online' events from triggering a sync — the
+    // whole point of the offline-first design is that syncing can happen
+    // well after the student has walked away from the camera step.
+    if(isOnline && App.currentStudent){
+      Backend.syncPending(App.currentStudent.studentId).then(count=>{
+        if(count>0){
+          toast(`Synced ${count} attendance record${count>1?'s':''} to the server`);
+          this.updateSyncBadge();
+        }
+      });
     }
   },
 
