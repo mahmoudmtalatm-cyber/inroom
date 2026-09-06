@@ -404,6 +404,7 @@ a{color:inherit;}
   </div>
   <div class="topbar-right">
     <span id="netPill" class="pill pill-online"><span class="pill-dot"></span>Online</span>
+    <button id="changeAdminPassBtn" class="btn-ghost-dark" style="display:none" onclick="Auth.openChangeAdminPassword()">Change password</button>
     <button id="logoutBtn" class="btn-ghost-dark" style="display:none" onclick="App.logout()">Log out</button>
   </div>
 </div>
@@ -584,6 +585,33 @@ a{color:inherit;}
 </div>
 
 <!-- ============================================================
+     CHANGE PASSWORD MODAL (admin)
+     ============================================================ -->
+<div class="modal-backdrop" id="changeAdminPassModal">
+  <div class="modal">
+    <h3>Change admin password</h3>
+    <p class="sub" style="margin-top:6px;margin-bottom:18px">The new password is stored in Firestore only — it never appears in the app's source code.</p>
+    <div id="changeAdminPassAlert"></div>
+    <div class="field">
+      <label for="admPassCurrent">Current password</label>
+      <input id="admPassCurrent" type="password" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="admPassNew">New password</label>
+      <input id="admPassNew" type="password" autocomplete="off" placeholder="At least 8 characters">
+    </div>
+    <div class="field">
+      <label for="admPassConfirm">Confirm new password</label>
+      <input id="admPassConfirm" type="password" autocomplete="off">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-secondary btn-block" onclick="Auth.closeChangeAdminPassword()">Cancel</button>
+      <button class="btn btn-primary btn-block" onclick="Auth.submitChangeAdminPassword()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
      ADMIN LOGIN
      ============================================================ -->
 <section class="screen" id="screen-adminLogin">
@@ -684,7 +712,7 @@ a{color:inherit;}
     <div class="card" style="overflow:auto">
       <table class="sheet-table">
         <thead><tr>
-          <th>Student</th><th>ID</th><th>Group</th><th>1st confirm</th><th>3rd confirm</th><th>Sync</th>
+          <th>Student</th><th>ID</th><th>Section</th><th>Group</th><th>1st confirm</th><th>3rd confirm</th><th>Sync</th>
         </tr></thead>
         <tbody id="sheetBody"></tbody>
       </table>
@@ -1213,6 +1241,10 @@ const Backend = {
     return data.password === password ? data : null;
   },
 
+  async updateAdminPassword(username, newPassword){
+    await db.collection('admins').doc(username).update({ password:newPassword });
+  },
+
   async getSessions(){
     const snap = await db.collection('sessions').orderBy('startedAt','desc').get();
     return snap.docs.map(d=>({ id:d.id, ...d.data() }));
@@ -1258,6 +1290,7 @@ const Backend = {
         studentId: r.studentId,
         studentName: r.studentName,
         group: r.group,
+        section: r.section,
         firstConfirmAt: r.firstConfirmAt,
         confirmedAt: r.confirmedAt,
         syncedAt: Date.now(),
@@ -1313,6 +1346,7 @@ const Nav = {
     };
     document.getElementById(map[name]).classList.add('active');
     document.getElementById('logoutBtn').style.display = (App.currentStudent || App.currentAdmin) ? 'inline-flex' : 'none';
+    document.getElementById('changeAdminPassBtn').style.display = App.currentAdmin ? 'inline-flex' : 'none';
     window.scrollTo({top:0, behavior:'instant'});
   }
 };
@@ -1408,6 +1442,45 @@ const Auth = {
     Nav.go('adminDashboard');
     AdminUI.renderDashboard();
     return false;
+  },
+
+  openChangeAdminPassword(){
+    document.getElementById('admPassCurrent').value='';
+    document.getElementById('admPassNew').value='';
+    document.getElementById('admPassConfirm').value='';
+    document.getElementById('changeAdminPassAlert').innerHTML='';
+    document.getElementById('changeAdminPassModal').classList.add('active');
+  },
+  closeChangeAdminPassword(){
+    document.getElementById('changeAdminPassModal').classList.remove('active');
+  },
+  async submitChangeAdminPassword(){
+    const alertBox = document.getElementById('changeAdminPassAlert');
+    alertBox.innerHTML='';
+    const current = document.getElementById('admPassCurrent').value.trim();
+    const next = document.getElementById('admPassNew').value.trim();
+    const confirm = document.getElementById('admPassConfirm').value.trim();
+
+    if(!App.currentAdmin){
+      alertBox.innerHTML = `<div class="alert alert-error" style="margin-bottom:16px">You need to be signed in as admin to change this.</div>`;
+      return;
+    }
+    if(current !== App.currentAdmin.password){
+      alertBox.innerHTML = `<div class="alert alert-error" style="margin-bottom:16px">Current password is incorrect.</div>`;
+      return;
+    }
+    if(next.length < 8){
+      alertBox.innerHTML = `<div class="alert alert-error" style="margin-bottom:16px">New password must be at least 8 characters.</div>`;
+      return;
+    }
+    if(next !== confirm){
+      alertBox.innerHTML = `<div class="alert alert-error" style="margin-bottom:16px">New password and confirmation don't match.</div>`;
+      return;
+    }
+    await Backend.updateAdminPassword(App.currentAdmin.username, next);
+    App.currentAdmin.password = next;
+    this.closeChangeAdminPassword();
+    toast('Password updated — use it next time you sign in');
   }
 };
 
@@ -1696,6 +1769,7 @@ const StudentFlow = {
         studentId: App.currentStudent.studentId,
         studentName: App.currentStudent.name,
         group: App.currentStudent.group,
+        section: App.currentStudent.section,
         firstConfirmAt: Date.now(), // approximation for the demo; real timestamps kept per-confirm below
         confirmedAt: Date.now(),
         synced:false,
@@ -1898,6 +1972,13 @@ const AdminUI = {
     const sessions = await Backend.getSessions();
     const session = sessions.find(s=>s.id===sessionId);
     const records = await Backend.getServerAttendanceForSession(sessionId);
+    // Sort into a readable roster order: by section, then alphabetically
+    // by name within each section, instead of raw sync arrival order.
+    records.sort((a,b)=>{
+      const sa = a.section ?? 999, sb = b.section ?? 999;
+      if(sa !== sb) return sa - sb;
+      return String(a.studentName).localeCompare(String(b.studentName), 'ar');
+    });
     this._sheetSession = session;
     this._sheetRecords = records;
 
@@ -1906,12 +1987,13 @@ const AdminUI = {
 
     const body = document.getElementById('sheetBody');
     if(records.length===0){
-      body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--slate-500);padding:30px">No students have synced attendance for this session yet.</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--slate-500);padding:30px">No students have synced attendance for this session yet.</td></tr>`;
     }else{
       body.innerHTML = records.map(r=>`
         <tr>
           <td>${r.studentName}</td>
           <td class="mono">${r.studentId}</td>
+          <td>${r.section != null ? r.section : '—'}</td>
           <td>Group ${r.group}</td>
           <td class="mono">${fmtTime(r.firstConfirmAt)}</td>
           <td class="mono">${fmtTime(r.confirmedAt)}</td>
@@ -1923,12 +2005,24 @@ const AdminUI = {
 
   exportCsv(){
     if(!this._sheetSession) return;
-    const rows = [['Student Name','Student ID','Group','First Confirm','Final Confirm']];
+    const rows = [['Student Name','Student ID','Section','Group','First Confirm','Final Confirm']];
     this._sheetRecords.forEach(r=>{
-      rows.push([r.studentName, r.studentId, r.group, new Date(r.firstConfirmAt).toISOString(), new Date(r.confirmedAt).toISOString()]);
+      rows.push([
+        r.studentName,
+        r.studentId,
+        r.section != null ? r.section : '',
+        r.group,
+        new Date(r.firstConfirmAt).toISOString(),
+        new Date(r.confirmedAt).toISOString(),
+      ]);
     });
     const csv = rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], {type:'text/csv'});
+    // Prepend a UTF-8 BOM. Without it, Excel opens this file using the
+    // system's default codepage instead of UTF-8 — with an all-Arabic
+    // roster, that turns every name into garbled/blank-looking text,
+    // which is exactly what "the data is missing" looks like on open.
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], {type:'text/csv;charset=utf-8'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href=url; a.download = `${this._sheetSession.title.replace(/[^a-z0-9]+/gi,'_')}_attendance.csv`;
