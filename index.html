@@ -1125,14 +1125,41 @@ const StudentFlow = {
     try{
       this.stream = await navigator.mediaDevices.getUserMedia({
         video:{
-          facingMode:'environment',
-          width:{ ideal:1280 },
-          height:{ ideal:720 },
+          facingMode:{ ideal:'environment' },
+          width:{ ideal:1920 },
+          height:{ ideal:1080 },
+          // Ask for continuous autofocus where the browser/device supports it.
+          // Ignored harmlessly where unsupported.
+          advanced:[{ focusMode:'continuous' }],
         }
       });
       const video = document.getElementById('scanVideo');
       video.srcObject = this.stream;
       await video.play();
+
+      // Try to explicitly push continuous autofocus via the track's own
+      // capabilities too, since some browsers only honor it here.
+      const track = this.stream.getVideoTracks()[0];
+      if(track && track.getCapabilities){
+        try{
+          const caps = track.getCapabilities();
+          if(caps.focusMode && caps.focusMode.includes('continuous')){
+            await track.applyConstraints({ advanced:[{ focusMode:'continuous' }] });
+          }
+        }catch(e){ /* not supported on this device — fine, ignore */ }
+      }
+
+      this.useNativeDetector = ('BarcodeDetector' in window);
+      if(this.useNativeDetector){
+        try{
+          const formats = await window.BarcodeDetector.getSupportedFormats();
+          if(!formats.includes('qr_code')) this.useNativeDetector=false;
+        }catch(e){ this.useNativeDetector=false; }
+      }
+      if(this.useNativeDetector){
+        this.detector = new window.BarcodeDetector({ formats:['qr_code'] });
+      }
+
       this.scanLoop();
     }catch(err){
       document.getElementById('scanMsg').textContent = 'Camera access was blocked. Allow camera permission and try again.';
@@ -1140,19 +1167,47 @@ const StudentFlow = {
     }
   },
 
+  // Scan a downscaled working copy of the frame instead of the raw sensor
+  // resolution. This is what makes phone scanning fast and reliable:
+  // jsQR (and even native detectors) do better on a moderate, evenly-lit
+  // buffer than on a huge noisy one, and downscaling keeps every frame
+  // cheap enough to actually finish before the next one arrives.
   scanLoop(){
     const video = document.getElementById('scanVideo');
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently:true });
-    const tick = ()=>{
+    const WORK_SIZE = 720; // longest edge of the working buffer
+
+    let lastAttempt = 0;
+    const MIN_INTERVAL = 60; // ~16 scans/sec cap — plenty for a moving phone, keeps CPU sane
+
+    const tick = async ()=>{
       if(!this.active || !this.stream){ return; }
-      if(video.readyState === video.HAVE_ENOUGH_DATA){
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video,0,0,canvas.width,canvas.height);
-        const imgData = ctx.getImageData(0,0,canvas.width,canvas.height);
-        const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts:'attemptBoth' });
-        if(code && code.data){ this.handleDecoded(code.data); }
+      const now = performance.now();
+      if(video.readyState === video.HAVE_ENOUGH_DATA && (now - lastAttempt) >= MIN_INTERVAL){
+        lastAttempt = now;
+        const vw = video.videoWidth, vh = video.videoHeight;
+        if(vw && vh){
+          const scale = Math.min(1, WORK_SIZE / Math.max(vw, vh));
+          canvas.width = Math.round(vw * scale);
+          canvas.height = Math.round(vh * scale);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          if(this.useNativeDetector){
+            try{
+              const codes = await this.detector.detect(canvas);
+              if(codes && codes.length){ this.handleDecoded(codes[0].rawValue); }
+            }catch(e){
+              // fall back to jsQR for the rest of the session if native detect errors out
+              this.useNativeDetector=false;
+            }
+          }
+          if(!this.useNativeDetector){
+            const imgData = ctx.getImageData(0,0,canvas.width,canvas.height);
+            const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts:'dontInvert' });
+            if(code && code.data){ this.handleDecoded(code.data); }
+          }
+        }
       }
       this.scanRAF = requestAnimationFrame(tick);
     };
