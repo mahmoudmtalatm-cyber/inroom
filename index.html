@@ -224,12 +224,6 @@ a{color:inherit;}
 }
 .login-card h2{font-size:24px;margin-bottom:6px;}
 .login-card .sub{color:var(--slate-500);font-size:14px;margin-bottom:26px;}
-.demo-box{
-  margin-top:20px;padding:12px 14px;background:var(--bg);border:1px dashed var(--slate-300);
-  border-radius:var(--radius-sm);font-size:12.5px;color:var(--slate-600);
-}
-.demo-box strong{color:var(--navy-900);}
-.demo-box code{font-family:var(--font-mono);background:#fff;border:1px solid var(--line);padding:1px 6px;border-radius:4px;}
 .back-link{
   display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:600;color:var(--slate-500);
   margin-bottom:22px;
@@ -260,16 +254,6 @@ a{color:inherit;}
 .status-dot.offline{background:var(--success);box-shadow:0 0 0 4px var(--success-bg);}
 .status-row .status-text strong{display:block;font-size:14.5px;}
 .status-row .status-text span{font-size:12.5px;color:var(--slate-500);}
-
-.countdown-ring{
-  width:120px;height:120px;margin:8px auto 20px;position:relative;
-  display:flex;align-items:center;justify-content:center;
-}
-.countdown-ring svg{transform:rotate(-90deg);width:120px;height:120px;}
-.countdown-ring circle{fill:none;stroke-width:6;}
-.countdown-ring .track{stroke:var(--line);}
-.countdown-ring .bar{stroke:var(--blue-600);stroke-linecap:round;transition:stroke-dashoffset 1s linear;}
-.countdown-num{position:absolute;font-family:var(--font-mono);font-size:30px;font-weight:600;color:var(--navy-950);}
 
 .camera-wrap{
   position:relative;border-radius:var(--radius-md);overflow:hidden;background:#000;
@@ -503,9 +487,6 @@ a{color:inherit;}
         </div>
         <button class="btn btn-primary btn-block" type="submit">Sign in</button>
       </form>
-      <div class="demo-box">
-        <strong>Testing the flow?</strong> Use the demo account — <code>DEMO-000</code> / <code>0000</code>. It's clearly separated from real student records and never appears on a real attendance sheet.
-      </div>
     </div>
   </div>
 </section>
@@ -532,13 +513,6 @@ a{color:inherit;}
           <strong id="connLabel">Checking connection…</strong>
           <span id="connSub">Waiting for you to go offline</span>
         </div>
-      </div>
-      <div id="countdownArea" style="display:none">
-        <div class="countdown-ring">
-          <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"></circle><circle class="bar" id="ringBar" cx="60" cy="60" r="52" stroke-dasharray="327" stroke-dashoffset="0"></circle></svg>
-          <div class="countdown-num" id="countdownNum">10</div>
-        </div>
-        <p style="text-align:center;color:var(--slate-500);font-size:13.5px">Hold tight — confirming you're disconnected</p>
       </div>
       <button class="btn btn-primary btn-block" id="startCameraBtn" style="display:none;margin-top:8px" onclick="StudentFlow.goToCamera()">Open camera</button>
     </div>
@@ -575,9 +549,39 @@ a{color:inherit;}
         <button class="btn btn-secondary btn-block" onclick="Nav.go('landing')">Done</button>
         <button class="btn btn-primary btn-block" id="retryBtn" onclick="StudentFlow.reset()" style="display:none">Try again</button>
       </div>
+      <div style="margin-top:14px;text-align:center">
+        <button class="btn btn-secondary btn-sm" onclick="Auth.openChangePin()" style="background:transparent;border-color:var(--line)">Change my PIN</button>
+      </div>
     </div>
   </div>
 </section>
+
+<!-- ============================================================
+     CHANGE PIN MODAL (student)
+     ============================================================ -->
+<div class="modal-backdrop" id="changePinModal">
+  <div class="modal">
+    <h3>Change your PIN</h3>
+    <p class="sub" style="margin-top:6px;margin-bottom:18px">This replaces the PIN you sign in with next time. Keep it somewhere you'll remember.</p>
+    <div id="changePinAlert"></div>
+    <div class="field">
+      <label for="pinCurrent">Current PIN</label>
+      <input id="pinCurrent" type="password" autocomplete="off" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label for="pinNew">New PIN</label>
+      <input id="pinNew" type="password" autocomplete="off" inputmode="numeric" placeholder="At least 4 digits">
+    </div>
+    <div class="field">
+      <label for="pinConfirm">Confirm new PIN</label>
+      <input id="pinConfirm" type="password" autocomplete="off" inputmode="numeric">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-secondary btn-block" onclick="Auth.closeChangePin()">Cancel</button>
+      <button class="btn btn-primary btn-block" onclick="Auth.submitChangePin()">Save</button>
+    </div>
+  </div>
+</div>
 
 <!-- ============================================================
      ADMIN LOGIN
@@ -601,7 +605,6 @@ a{color:inherit;}
         </div>
         <button class="btn btn-primary btn-block" type="submit">Sign in</button>
       </form>
-      <div class="demo-box"><strong>Demo credentials:</strong> <code>lecturer</code> / <code>lecture2026</code></div>
     </div>
   </div>
 </section>
@@ -689,7 +692,7 @@ a{color:inherit;}
   </div>
 </section>
 
-<div class="footer-note">InRoom — local demo data store. See <code>Backend</code> in source for the Firestore swap-in points.</div>
+<div class="footer-note">InRoom — live attendance data stored in Firestore.</div>
 
 <!-- New session modal -->
 <div class="modal-backdrop" id="sessionModal">
@@ -754,23 +757,382 @@ const db = firebase.firestore();
    that, the source of truth is the Firestore console — add, edit,
    or remove students/admins there, no code changes needed. */
 const SEED_STUDENTS = [
-  { studentId:'STU-1001', name:'Aisha Mansour', group:'A', pin:'1147' },
-  { studentId:'STU-1002', name:'Youssef Adel',  group:'A', pin:'2093' },
-  { studentId:'STU-1003', name:'Mariam Fathy',  group:'A', pin:'3316' },
-  { studentId:'STU-1004', name:'Omar Nabil',    group:'B', pin:'4482' },
-  { studentId:'STU-1005', name:'Laila Hassan',  group:'B', pin:'5510' },
-  { studentId:'STU-1006', name:'Karim Tarek',   group:'B', pin:'6674' },
-  { studentId:'STU-1007', name:'Nour Ibrahim',  group:'A', pin:'7729' },
-  { studentId:'STU-1008', name:'Hana Said',     group:'B', pin:'8801' },
-  { studentId:'DEMO-000', name:'Test Student (Demo)', group:'A', pin:'0000', demo:true },
+  { studentId:'2401310', name:'مها ابراهيم خليل الخولى', group:'A', section:1, pin:'2401310' },
+  { studentId:'2401019', name:'ياسمين ابراهيم صدقى عربان', group:'A', section:1, pin:'2401019' },
+  { studentId:'2401259', name:'الاء ابراهيم طاهر احمد الرفاعى', group:'A', section:1, pin:'2401259' },
+  { studentId:'2401400', name:'يوسف ابراهيم عبدالعزيز ابراهيم', group:'A', section:1, pin:'2401400' },
+  { studentId:'2401269', name:'عمر ابراهيم عبدالفتاح حنفى محمد', group:'A', section:1, pin:'2401269' },
+  { studentId:'2401122', name:'عبدالله ابراهيم مامون عبدالهادى شتية', group:'A', section:1, pin:'2401122' },
+  { studentId:'2401165', name:'سهام ابراهيم محمد محمود البرماوى', group:'A', section:1, pin:'2401165' },
+  { studentId:'2401017', name:'نورهان احمد السيد سعد الدين', group:'A', section:1, pin:'2401017' },
+  { studentId:'2401336', name:'زياد احمد حامد حسان عبدالنبي', group:'A', section:1, pin:'2401336' },
+  { studentId:'2401039', name:'محمد احمد حسين حسين ابراهيم', group:'A', section:1, pin:'2401039' },
+  { studentId:'2301417', name:'شهد جمال عبد العزيز عباس عبدالبارى', group:'A', section:1, pin:'2301417' },
+  { studentId:'2301053', name:'هاجر على نجم', group:'A', section:1, pin:'2301053' },
+  { studentId:'2301015', name:'تسنيم عاطف عبدالوهاب', group:'A', section:1, pin:'2301015' },
+  { studentId:'2201488', name:'منة محمد محمود حامد', group:'A', section:1, pin:'2201488' },
+  { studentId:'2401262', name:'حنين احمد سعد الدين محمد بندق', group:'A', section:1, pin:'2401262' },
+  { studentId:'2401052', name:'ادهم احمد سعيد محمد غزال', group:'A', section:1, pin:'2401052' },
+  { studentId:'2401313', name:'ايمن احمد سيد احمد العزب', group:'A', section:1, pin:'2401313' },
+  { studentId:'2401144', name:'بسنت احمد شوقي مرسي سلام', group:'A', section:1, pin:'2401144' },
+  { studentId:'2401104', name:'عمر احمد صابر على سليمان الجوهري', group:'A', section:1, pin:'2401104' },
+  { studentId:'2401176', name:'يحيى احمد طه ابراهيم مرجان', group:'A', section:1, pin:'2401176' },
+  { studentId:'2401155', name:'نور الدين احمد عادل انور عبيد', group:'A', section:1, pin:'2401155' },
+  { studentId:'2401053', name:'مصطفى احمد عبد الفتاح لبيب مكى', group:'A', section:1, pin:'2401053' },
+  { studentId:'2401100', name:'ادهم احمد عبدالفتاح صبرى عبدالمولى احمد', group:'A', section:1, pin:'2401100' },
+  { studentId:'2401068', name:'لينه احمد على احمد كحيل', group:'A', section:1, pin:'2401068' },
+  { studentId:'2401255', name:'فرحة احمد ماهر احمد على البسيوني', group:'A', section:1, pin:'2401255' },
+  { studentId:'2401170', name:'ديلانا احمد محرم محمد علي', group:'A', section:1, pin:'2401170' },
+  { studentId:'2301019', name:'ياسمين احمد فوزى العطار', group:'A', section:1, pin:'2301019' },
+  { studentId:'2301022', name:'رنا ياسر صالح وهبه', group:'A', section:1, pin:'2301022' },
+  { studentId:'2401037', name:'عبدالله احمد محمد احمد شورى', group:'A', section:2, pin:'2401037' },
+  { studentId:'2401429', name:'محمد احمد محمد عبداللطيف سليم', group:'A', section:2, pin:'2401429' },
+  { studentId:'2401120', name:'بسنت احمد محمد محمد', group:'A', section:2, pin:'2401120' },
+  { studentId:'2401071', name:'مروان احمد محمود ابوزيد عبد الرحمن', group:'A', section:2, pin:'2401071' },
+  { studentId:'2401018', name:'يوسف احمد محمود عبد النعيم حزين', group:'A', section:2, pin:'2401018' },
+  { studentId:'2401088', name:'رغد احمد محمود عبدالحميد صقر', group:'A', section:2, pin:'2401088' },
+  { studentId:'2401116', name:'محمد احمد محمود على الشبينى', group:'A', section:2, pin:'2401116' },
+  { studentId:'2401282', name:'سلمى احمد وهبة انور عابدين', group:'A', section:2, pin:'2401282' },
+  { studentId:'2401134', name:'محمود احمد يسرى الشامي', group:'A', section:2, pin:'2401134' },
+  { studentId:'2401061', name:'فارس احمد يوسف احمد يوسف', group:'A', section:2, pin:'2401061' },
+  { studentId:'2401067', name:'محمد ادريس فرج عبدالغني', group:'A', section:2, pin:'2401067' },
+  { studentId:'2401024', name:'على اسامة عبدالجليل الحسانين رسلان', group:'A', section:2, pin:'2401024' },
+  { studentId:'2301404', name:'امانى احمد محمد احمد على الدين', group:'A', section:2, pin:'2301404' },
+  { studentId:'2401200', name:'عبدالله اسامه عبدالمنعم محمد عاشور', group:'A', section:2, pin:'2401200' },
+  { studentId:'2401033', name:'مريم اسامه على احمد زين الدين', group:'A', section:2, pin:'2401033' },
+  { studentId:'2401112', name:'احمد اسعد مهدى احمد عمران', group:'A', section:2, pin:'2401112' },
+  { studentId:'2401319', name:'فارس اسلام رمضان عطيه', group:'A', section:2, pin:'2401319' },
+  { studentId:'2401114', name:'حبيبة اسلام محمود عبدالسلام العيص', group:'A', section:2, pin:'2401114' },
+  { studentId:'2401311', name:'رنا اسماعيل يحيي اسماعيل عمر', group:'A', section:2, pin:'2401311' },
+  { studentId:'2401121', name:'ندى اشرف ابراهيم ابوالمجد', group:'A', section:2, pin:'2401121' },
+  { studentId:'2401320', name:'سهيلة اشرف احمد سيد احمد', group:'A', section:2, pin:'2401320' },
+  { studentId:'2401371', name:'فادي اشرف انيس ميخائيل جادالرب', group:'A', section:2, pin:'2401371' },
+  { studentId:'2401289', name:'سلمى قاعود محمد احمد حمودة', group:'A', section:2, pin:'2401289' },
+  { studentId:'2401084', name:'احمد ياسر على عبدالجواد غانم', group:'A', section:2, pin:'2401084' },
+  { studentId:'2301054', name:'محمد جمال فتحى حسين', group:'A', section:2, pin:'2301054' },
+  { studentId:'2301037', name:'اسماء سعد فتح الباب', group:'A', section:2, pin:'2301037' },
+  { studentId:'2401202', name:'ملك اشرف صبحى عبدالسلام ابوبكر', group:'A', section:3, pin:'2401202' },
+  { studentId:'2401302', name:'محمد اكرم كمال عبدالنبى الفقى', group:'A', section:3, pin:'2401302' },
+  { studentId:'2401278', name:'السيد الحسن السيد عبدالحليم', group:'A', section:3, pin:'2401278' },
+  { studentId:'2401412', name:'محمد السيد احمد السيد مساعد', group:'A', section:3, pin:'2401412' },
+  { studentId:'2401267', name:'حبيبة السيد احمد رجب السد', group:'A', section:3, pin:'2401267' },
+  { studentId:'2401390', name:'حبيبة السيد مصطفى محمد', group:'A', section:3, pin:'2401390' },
+  { studentId:'2401026', name:'نورسين امير فوزى السيد قطب عبده', group:'A', section:3, pin:'2401026' },
+  { studentId:'2401387', name:'عمر انس السيد سليمان', group:'A', section:3, pin:'2401387' },
+  { studentId:'2401133', name:'محمد ايمن حسن عبد الجواد مهدي', group:'A', section:3, pin:'2401133' },
+  { studentId:'2401383', name:'جنه ايمن عبداللطيف فريد يوسف', group:'A', section:3, pin:'2401383' },
+  { studentId:'2401411', name:'محمد ايمن فهمي علي الصابر', group:'A', section:3, pin:'2401411' },
+  { studentId:'2401075', name:'محمد ايمن محمد ابراهيم محمد اسماعيل', group:'A', section:3, pin:'2401075' },
+  { studentId:'2401222', name:'سلمى ايمن محمد احمد احمد', group:'A', section:3, pin:'2401222' },
+  { studentId:'2401309', name:'حبيبه ايمن مصطفى احمد', group:'A', section:3, pin:'2401309' },
+  { studentId:'2401208', name:'اروى ايمن عبدالواحد عبدالمالك', group:'A', section:3, pin:'2401208' },
+  { studentId:'2401356', name:'منة الله إسلام فاروق السيد', group:'A', section:3, pin:'2401356' },
+  { studentId:'2301042', name:'علا احمد رجب احمد', group:'A', section:3, pin:'2301042' },
+  { studentId:'2401395', name:'محمود إيهاب فكرى محمد الإمام', group:'A', section:4, pin:'2401395' },
+  { studentId:'2401370', name:'رتاج أحمد فرغلى سليم فرغلى', group:'A', section:4, pin:'2401370' },
+  { studentId:'2401330', name:'عمر أحمد محمود محمد أحمد', group:'A', section:4, pin:'2401330' },
+  { studentId:'2401331', name:'عبدالرحمن أشرف حسين احمد الشرقاوي', group:'A', section:4, pin:'2401331' },
+  { studentId:'2401333', name:'ريناد أشرف فتح الله فتح الله غانم', group:'A', section:4, pin:'2401333' },
+  { studentId:'2401317', name:'زياد بسام محمد عبدالخالق', group:'A', section:4, pin:'2401317' },
+  { studentId:'2401009', name:'عبدالرحمن بشرى بدران فرج', group:'A', section:4, pin:'2401009' },
+  { studentId:'2301142', name:'نيره سمير عبدالحميد عبدالمنعم', group:'A', section:4, pin:'2301142' },
+  { studentId:'2301064', name:'عمر مؤمن رجب', group:'A', section:4, pin:'2301064' },
+  { studentId:'2401324', name:'ديفيد بهاء برتى فرج عبدالسي', group:'A', section:4, pin:'2401324' },
+  { studentId:'2401204', name:'محمد بهاء عبدالحميد حسن عبدالحميد', group:'A', section:4, pin:'2401204' },
+  { studentId:'2401250', name:'ملك توفيق محمد توفيق كلش', group:'A', section:4, pin:'2401250' },
+  { studentId:'2401257', name:'مصطفى جلال على ابراهيم الانه', group:'A', section:4, pin:'2401257' },
+  { studentId:'2401242', name:'مصطفى جمال على شحاته', group:'A', section:4, pin:'2401242' },
+  { studentId:'2401451', name:'إياد محمد إبراهيم حسان', group:'A', section:4, pin:'2401451' },
+  { studentId:'2401174', name:'محمد حازم حسن احمد دميس', group:'A', section:4, pin:'2401174' },
+  { studentId:'2401452', name:'مريم ابراهيم خليل الخولى', group:'A', section:4, pin:'2401452' },
+  { studentId:'2401461', name:'إبراهيم عيسى امحمد الشاوش', group:'A', section:4, pin:'2401461' },
+  { studentId:'2401464', name:'رواء السيد على بهنسى', group:'A', section:4, pin:'2401464' },
+  { studentId:'2301063', name:'مؤمنة نورالدين على', group:'A', section:4, pin:'2301063' },
+  { studentId:'2401111', name:'احمد حسام الدين محمد توفيق سليمه', group:'A', section:5, pin:'2401111' },
+  { studentId:'2401115', name:'عمر حسام الدين محمد جاد عبدالعظيم', group:'A', section:5, pin:'2401115' },
+  { studentId:'2401368', name:'عبد القادر حسام عبد القادر أحمد أبو العطا', group:'A', section:5, pin:'2401368' },
+  { studentId:'2401043', name:'محمد حسام محمد احمد الصياد', group:'A', section:5, pin:'2401043' },
+  { studentId:'2401293', name:'احمد حسام محمد سعد عبدالعزيز', group:'A', section:5, pin:'2401293' },
+  { studentId:'2401181', name:'محمد حسن ربيع محمد حمودة', group:'A', section:5, pin:'2401181' },
+  { studentId:'2401065', name:'مصطفى حسن مصطفى احمد اسماعيل', group:'A', section:5, pin:'2401065' },
+  { studentId:'2401221', name:'بهاء حسنين صلاح علي عبد العاطى', group:'A', section:5, pin:'2401221' },
+  { studentId:'2401106', name:'منة الله حسين محمد ابراهيم محمد التداوي', group:'A', section:5, pin:'2401106' },
+  { studentId:'2401187', name:'فاطمه شعبان صلاح بسيونى عبدالوهاب', group:'A', section:5, pin:'2401187' },
+  { studentId:'2301156', name:'رنا ايمن محمد مصطفى', group:'A', section:5, pin:'2301156' },
+  { studentId:'2301132', name:'محمد وحيد لبيب', group:'A', section:5, pin:'2301132' },
+  { studentId:'2401015', name:'عمر حلمى مرزوق محمد مرزوق', group:'A', section:5, pin:'2401015' },
+  { studentId:'2401207', name:'حبيبة حماده احمد محمود بكر', group:'A', section:5, pin:'2401207' },
+  { studentId:'2401287', name:'مريم حماده محمد محمود مرزوق', group:'A', section:5, pin:'2401287' },
+  { studentId:'2401229', name:'احمد خالد ابراهيم نصار', group:'A', section:5, pin:'2401229' },
+  { studentId:'2401422', name:'محمد خالد محمد حسن محمد', group:'A', section:5, pin:'2401422' },
+  { studentId:'2401038', name:'اسامه خيرى ابراهيم عبدالرحمن عبداللا', group:'A', section:5, pin:'2401038' },
+  { studentId:'2401277', name:'رويس راتب نجيب عطا الله', group:'A', section:5, pin:'2401277' },
+  { studentId:'2401272', name:'سهيلة رجب اسماعيل اسماعيل عمر', group:'A', section:5, pin:'2401272' },
+  { studentId:'2401172', name:'ايه رجب السيد رزق الجندى', group:'A', section:5, pin:'2401172' },
+  { studentId:'2301182', name:'بلال ياسر عبدالمنعم محمد', group:'A', section:5, pin:'2301182' },
+  { studentId:'2301027', name:'محمد خالد محمد محمد احمد', group:'A', section:5, pin:'2301027' },
+  { studentId:'2301152', name:'احمد علاء فؤاد حسن', group:'A', section:5, pin:'2301152' },
+  { studentId:'2401173', name:'ندى رجب محمد صديق مهنى', group:'A', section:6, pin:'2401173' },
+  { studentId:'2401035', name:'ايه رسمى عبدالعزيز صباح الخولى', group:'A', section:6, pin:'2401035' },
+  { studentId:'2401055', name:'منة رشوان محمد محمد', group:'A', section:6, pin:'2401055' },
+  { studentId:'2401099', name:'جنه رضا ابراهيم السيد نصار', group:'A', section:6, pin:'2401099' },
+  { studentId:'2401389', name:'ندى رضا فوزى منصور حسنين', group:'A', section:6, pin:'2401389' },
+  { studentId:'2401252', name:'ملك رضا محمد شبل عيد الاشقر', group:'A', section:6, pin:'2401252' },
+  { studentId:'2401082', name:'فادى رفيق عدلى بساده بولس', group:'A', section:6, pin:'2401082' },
+  { studentId:'2401132', name:'باسم رمزى صبحى دانيال عبدالمسيح', group:'A', section:6, pin:'2401132' },
+  { studentId:'2401359', name:'ريتاج رمضان محمد الشيخ', group:'A', section:6, pin:'2401359' },
+  { studentId:'2401284', name:'يوسف رياض مرسى محمد النجار', group:'A', section:6, pin:'2401284' },
+  { studentId:'2401080', name:'رزان سامى حجازى على الخالدى', group:'A', section:6, pin:'2401080' },
+  { studentId:'2301264', name:'احمد عماد علي ابو الحسن علي الصعيدي', group:'A', section:6, pin:'2301264' },
+  { studentId:'2401178', name:'جاب الله سامي جاب الله طلخان منتصر', group:'A', section:6, pin:'2401178' },
+  { studentId:'2401092', name:'معاذ ساهر احمد جلال احمد محمد ابوعيد', group:'A', section:6, pin:'2401092' },
+  { studentId:'2401414', name:'عبد الله سعد الدين السيد عيسى', group:'A', section:6, pin:'2401414' },
+  { studentId:'2401355', name:'سارة سعد حسن محمد جعفر', group:'A', section:6, pin:'2401355' },
+  { studentId:'2401198', name:'احمد سعد عبدالله حامد سعد', group:'A', section:6, pin:'2401198' },
+  { studentId:'2401063', name:'محمد سعيد السيد محمد البصال', group:'A', section:6, pin:'2401063' },
+  { studentId:'2401366', name:'محمد سعيد كامل عبد الله إبراهيم', group:'A', section:6, pin:'2401366' },
+  { studentId:'2401128', name:'عبدالله سعيد محمد محمد', group:'A', section:6, pin:'2401128' },
+  { studentId:'2401265', name:'زهره سليمان جاسم سليمان على', group:'A', section:6, pin:'2401265' },
+  { studentId:'2401103', name:'أروى سمير ابراهيم على عرب', group:'A', section:6, pin:'2401103' },
+  { studentId:'2301298', name:'عزالدين عاصم حلمى بدوى', group:'A', section:6, pin:'2301298' },
+  { studentId:'2301058', name:'فاطمة محمد عوضين', group:'A', section:6, pin:'2301058' },
+  { studentId:'2301047', name:'ملك شرف محمد خضر', group:'A', section:6, pin:'2301047' },
+  { studentId:'2301251', name:'معاذ ايمن احمد محمود', group:'A', section:6, pin:'2301251' },
+  { studentId:'2301266', name:'محمد عبد لله حمودة على ابويونس', group:'A', section:6, pin:'2301266' },
+  { studentId:'2401230', name:'اروى سيد احمد ابراهيم محمود الهابط', group:'A', section:7, pin:'2401230' },
+  { studentId:'2401093', name:'أنس سيد عبدالعظيم راتب عبدالمنعم', group:'A', section:7, pin:'2401093' },
+  { studentId:'2401057', name:'الاء شحاتة احمد احمد عشرة', group:'A', section:7, pin:'2401057' },
+  { studentId:'2401081', name:'جنى شريف ابراهيم عبدالوهاب على', group:'A', section:7, pin:'2401081' },
+  { studentId:'2401401', name:'ياسمين شريف حسين عمر', group:'A', section:7, pin:'2401401' },
+  { studentId:'2401157', name:'محمد شريف محمد عبداللاه', group:'A', section:7, pin:'2401157' },
+  { studentId:'2401353', name:'محمد شعبان حسين النجار', group:'A', section:7, pin:'2401353' },
+  { studentId:'2401303', name:'محمد شعبان عبدالفتاح على ابوالعنين', group:'A', section:7, pin:'2401303' },
+  { studentId:'2401382', name:'شذا شمس الدين عبدالرسول الزبير محمد', group:'A', section:7, pin:'2401382' },
+  { studentId:'2301293', name:'باسل محمد السيد حسن عيد', group:'A', section:7, pin:'2301293' },
+  { studentId:'2301283', name:'أحمد زكريا محمد سليمان شامة', group:'A', section:7, pin:'2301283' },
+  { studentId:'2401299', name:'على صبحى حامد على سيد احمد نعام', group:'A', section:7, pin:'2401299' },
+  { studentId:'2401409', name:'يوسف طارق السيد الشحات السيد علوان', group:'A', section:7, pin:'2401409' },
+  { studentId:'2401201', name:'نور طارق حامد عبد الباقى السيد ابوالخير', group:'A', section:7, pin:'2401201' },
+  { studentId:'2401117', name:'حبيبه طارق محمد صلاح الدين ابوالمجد', group:'A', section:7, pin:'2401117' },
+  { studentId:'2401194', name:'احمد طارق محمود عادل عبدالمنعم الطويل', group:'A', section:7, pin:'2401194' },
+  { studentId:'2401013', name:'الاء طارق مصطفى العوضى محمد', group:'A', section:7, pin:'2401013' },
+  { studentId:'2401011', name:'مريم طايل عبد المنعم طايل بسيونى', group:'A', section:7, pin:'2401011' },
+  { studentId:'2401182', name:'ملك عابد عبد المنعم عبد القوى امام', group:'A', section:7, pin:'2401182' },
+  { studentId:'2401358', name:'محمد عادل السيد إبراهيم سيف الدين', group:'A', section:7, pin:'2401358' },
+  { studentId:'2401086', name:'محمد عادل رمضان حسن السيد', group:'A', section:7, pin:'2401086' },
+  { studentId:'2301308', name:'بيشوى عماد ارمانى كامل عبدالملاك', group:'A', section:7, pin:'2301308' },
+  { studentId:'2301431', name:'عصام صابر نصر لله على', group:'A', section:7, pin:'2301431' },
+  { studentId:'2401228', name:'اسماء عاطف مبروك بسيونى', group:'A', section:8, pin:'2401228' },
+  { studentId:'2401168', name:'فاطمة عبد الحليم سالم غازى حداد', group:'A', section:8, pin:'2401168' },
+  { studentId:'2401210', name:'محمد عبد العظيم عبد الحميد عبدالعظيم الجيزاوى', group:'A', section:8, pin:'2401210' },
+  { studentId:'2401239', name:'يوسف عبد الفتاح موسى بدر اللافي', group:'A', section:8, pin:'2401239' },
+  { studentId:'2401307', name:'يوسف عبد المجيد احمد محمد العيسوي', group:'A', section:8, pin:'2401307' },
+  { studentId:'2401136', name:'تقى عبد المنعم حسين بهنسى حسين', group:'A', section:8, pin:'2401136' },
+  { studentId:'2401098', name:'محمد عبد الناصر عبد القادر علي نمر', group:'A', section:8, pin:'2401098' },
+  { studentId:'2401049', name:'محمد عبد الهادى محمد عبد الهادى منصور', group:'A', section:8, pin:'2401049' },
+  { studentId:'2401177', name:'محمد عبد الونيس عبد الله محمد عبدالقادر', group:'A', section:8, pin:'2401177' },
+  { studentId:'2401123', name:'الشيماء عبدالحميد خليل عبدالحميد الطباخ', group:'A', section:8, pin:'2401123' },
+  { studentId:'2401096', name:'محمد عبدالرحيم محمد عبدالرحيم موسى', group:'A', section:8, pin:'2401096' },
+  { studentId:'2301208', name:'مصطفى احمد احمد صابر عيسى', group:'A', section:8, pin:'2301208' },
+  { studentId:'2301385', name:'احمد مدحت أحمد شاور', group:'A', section:8, pin:'2301385' },
+  { studentId:'2401417', name:'مي عبدالمنعم رياض الرامي', group:'A', section:8, pin:'2401417' },
+  { studentId:'2401025', name:'رحمه عبدالوهاب مصطفى عبدالوهاب', group:'A', section:8, pin:'2401025' },
+  { studentId:'2401118', name:'محمد عصام الدين عاطف محمد عيسى', group:'A', section:8, pin:'2401118' },
+  { studentId:'2401044', name:'عمر علاء البدرى الصغير عامر', group:'A', section:8, pin:'2401044' },
+  { studentId:'2401337', name:'يوسف علاء الدين صوابي مصطفى صوابي', group:'A', section:8, pin:'2401337' },
+  { studentId:'2401413', name:'امنيه علاء الدين موسى محمد عيد', group:'A', section:8, pin:'2401413' },
+  { studentId:'2401124', name:'جنى على حسن على حسن', group:'A', section:8, pin:'2401124' },
+  { studentId:'2401197', name:'محمد علي ابراهيم علي ابراهيم', group:'A', section:8, pin:'2401197' },
+  { studentId:'2301371', name:'زياد سعيد حسين على', group:'A', section:8, pin:'2301371' },
+  { studentId:'2301395', name:'محمد احمد سعد سلامة', group:'A', section:8, pin:'2301395' },
+  { studentId:'2401027', name:'نور عماد صبحى محمود عيسى', group:'B', section:9, pin:'2401027' },
+  { studentId:'2401135', name:'جنى عماد عبدالكريم محمد المرسى ابوشادى', group:'B', section:9, pin:'2401135' },
+  { studentId:'2401012', name:'حنين عمار السيد عبد الباسط', group:'B', section:9, pin:'2401012' },
+  { studentId:'2401190', name:'احمد عمرو صابر عبده حسن خليل', group:'B', section:9, pin:'2401190' },
+  { studentId:'2401305', name:'عبدالله عمرو عادل عباس', group:'B', section:9, pin:'2401305' },
+  { studentId:'2401193', name:'فاطمه عمرو عبدالله حنفى سيد احمد', group:'B', section:9, pin:'2401193' },
+  { studentId:'2401458', name:'مريم محمود محمد رجب', group:'B', section:9, pin:'2401458' },
+  { studentId:'2401153', name:'محمد عمرو محمد عبد المالك ابو ريشه', group:'B', section:9, pin:'2401153' },
+  { studentId:'2401126', name:'عمرو عيد حكيم موسى', group:'B', section:9, pin:'2401126' },
+  { studentId:'2301376', name:'فارس احمد محمد احمد', group:'B', section:9, pin:'2301376' },
+  { studentId:'2401465', name:'أميمة أحمد عبد الرؤوف توفيق محمد', group:'B', section:9, pin:'2401465' },
+  { studentId:'2401160', name:'فاطمة فضل فايز يوسف', group:'B', section:9, pin:'2401160' },
+  { studentId:'2401280', name:'خالد كامل السيد درويش', group:'B', section:9, pin:'2401280' },
+  { studentId:'2401154', name:'عبد الرحمن لبيب على أبو زهره', group:'B', section:9, pin:'2401154' },
+  { studentId:'2401392', name:'احمد مبروك شعبان مبروك', group:'B', section:9, pin:'2401392' },
+  { studentId:'2401085', name:'حبيبه مجدى محروس زين الدين حسب', group:'B', section:9, pin:'2401085' },
+  { studentId:'2401005', name:'سارة محمد ابراهيم خليفة سعد', group:'B', section:9, pin:'2401005' },
+  { studentId:'2401036', name:'نورالدين محمد ابراهيم محمد بغاغو', group:'B', section:9, pin:'2401036' },
+  { studentId:'2401209', name:'عمر محمد احمد عبد الحافظ السيد', group:'B', section:9, pin:'2401209' },
+  { studentId:'2401315', name:'حور محمد اسماعيل السيد', group:'B', section:9, pin:'2401315' },
+  { studentId:'2401152', name:'منه الله محمد الشحات رمضان غازى', group:'B', section:9, pin:'2401152' },
+  { studentId:'2401467', name:'محمد وائل محمد خطاب', group:'B', section:9, pin:'2401467' },
+  { studentId:'2401050', name:'ملك محمد القطب عبدالحميدالبرهامى', group:'B', section:10, pin:'2401050' },
+  { studentId:'2401191', name:'فاطمة محمد امين على الكفراوى', group:'B', section:10, pin:'2401191' },
+  { studentId:'2401074', name:'ألاء محمد بدر صالح', group:'B', section:10, pin:'2401074' },
+  { studentId:'2401062', name:'نادين محمد حامد الجنزوري', group:'B', section:10, pin:'2401062' },
+  { studentId:'2401384', name:'نور محمد حسن احمد حسن', group:'B', section:10, pin:'2401384' },
+  { studentId:'2401166', name:'مؤمن محمد حمدى على عبدالدايم', group:'B', section:10, pin:'2401166' },
+  { studentId:'2401425', name:'عماد الدين محمد رجائى عبدالحميد الغرباوي', group:'B', section:10, pin:'2401425' },
+  { studentId:'2401346', name:'عمر محمد رفعت الجوهري محمود', group:'B', section:10, pin:'2401346' },
+  { studentId:'2401185', name:'عبدالرحمن محمد رياض عبدالله هويدى', group:'B', section:10, pin:'2401185' },
+  { studentId:'2401351', name:'عبد الله محمد زكى كنان', group:'B', section:10, pin:'2401351' },
+  { studentId:'2301419', name:'اسراء اشرف سليمان احمد الجمال', group:'B', section:10, pin:'2301419' },
+  { studentId:'2401032', name:'ملك محمد صالح حامد حسن', group:'B', section:10, pin:'2401032' },
+  { studentId:'2401077', name:'احمد محمد صبحى عبده سالم', group:'B', section:10, pin:'2401077' },
+  { studentId:'2401283', name:'عبدالرحمن محمد صبرى عبدالله سليمان', group:'B', section:10, pin:'2401283' },
+  { studentId:'2401216', name:'مؤمن محمد صلاح الدين محمود نعيم', group:'B', section:10, pin:'2401216' },
+  { studentId:'2401161', name:'يوسف محمد صلاح غريب السيد', group:'B', section:10, pin:'2401161' },
+  { studentId:'2401236', name:'محمود محمد طلعت محمد عبد الكريم', group:'B', section:10, pin:'2401236' },
+  { studentId:'2401296', name:'عمر محمد طــه محمد حجاج', group:'B', section:10, pin:'2401296' },
+  { studentId:'2401308', name:'ندا سمير محمد عبد الجواد', group:'B', section:10, pin:'2401308' },
+  { studentId:'2401141', name:'يوسف محمد عبد الرازق السيد سلام', group:'B', section:10, pin:'2401141' },
+  { studentId:'2401162', name:'نور محمد عبد السلام احمد محمد', group:'B', section:10, pin:'2401162' },
+  { studentId:'2401365', name:'جنى محمد عبد الله عبد الرحمن جاد', group:'B', section:10, pin:'2401365' },
+  { studentId:'2301569', name:'محمد زاهر حمدى عبدالرؤوف', group:'B', section:10, pin:'2301569' },
+  { studentId:'2401140', name:'اسلام محمد عبدالحميد عبدالجيد فودة', group:'B', section:11, pin:'2401140' },
+  { studentId:'2401139', name:'مصطفى محمد عيد بهنسى', group:'B', section:11, pin:'2401139' },
+  { studentId:'2401078', name:'نور محمد عبدالرءوف بربروس خيرالدين محمد على', group:'B', section:11, pin:'2401078' },
+  { studentId:'2401232', name:'أروى محمد عبدالعزيز ابراهيم محمد شلبى', group:'B', section:11, pin:'2401232' },
+  { studentId:'2401045', name:'مصطفى محمد عبدالعزيز عبدالعاطى غباشى', group:'B', section:11, pin:'2401045' },
+  { studentId:'2401205', name:'هايدى محمد عبدالعليم فرج رزق', group:'B', section:11, pin:'2401205' },
+  { studentId:'2401179', name:'احمد محمد عبدالقادر حسن الخولى', group:'B', section:11, pin:'2401179' },
+  { studentId:'2401332', name:'خالد محمد عبدالله رضوان', group:'B', section:11, pin:'2401332' },
+  { studentId:'2401002', name:'عبدالله محمد عبدالله مختار هبيلة', group:'B', section:11, pin:'2401002' },
+  { studentId:'2401030', name:'احمد محمد عبدالمنعم كامل بديوي', group:'B', section:11, pin:'2401030' },
+  { studentId:'2401091', name:'اسراء محمد عبيد اسماعيل دراز', group:'B', section:11, pin:'2401091' },
+  { studentId:'2401364', name:'ضحى محمد عزت عبد ربه', group:'B', section:11, pin:'2401364' },
+  { studentId:'2401241', name:'اروى محمد عطيه محمد ابوطايش', group:'B', section:11, pin:'2401241' },
+  { studentId:'2401151', name:'ايه محمد على محمد النجولى', group:'B', section:11, pin:'2401151' },
+  { studentId:'2401314', name:'خالد محمد محمد احمد البسيونى', group:'B', section:11, pin:'2401314' },
+  { studentId:'2401340', name:'شهد محمد محمد ضيف بريك', group:'B', section:11, pin:'2401340' },
+  { studentId:'2401083', name:'عمر محمد محمد عبد المقصود عباس', group:'B', section:11, pin:'2401083' },
+  { studentId:'2401220', name:'مؤمن محمد محمد عجمى قاسم', group:'B', section:11, pin:'2401220' },
+  { studentId:'2401125', name:'كريمه محمد محمد كمال عبدالرحيم', group:'B', section:11, pin:'2401125' },
+  { studentId:'2401273', name:'محمود محمد محمود احمد عريف', group:'B', section:11, pin:'2401273' },
+  { studentId:'2401357', name:'مرام محمد محمود أحمد حسين', group:'B', section:11, pin:'2401357' },
+  { studentId:'2401394', name:'حنين محمد محمود محفوظ', group:'B', section:11, pin:'2401394' },
+  { studentId:'2401334', name:'ريماج محمد محمود محمد محمد النجار', group:'B', section:11, pin:'2401334' },
+  { studentId:'2401069', name:'مايا محمد محمود محمود طه', group:'B', section:11, pin:'2401069' },
+  { studentId:'2401286', name:'مصطفى محمد مصطفى مهدى مهران', group:'B', section:11, pin:'2401286' },
+  { studentId:'2401463', name:'إياد أشرف حسن إبراهيم', group:'B', section:11, pin:'2401463' },
+  { studentId:'2301580', name:'عبد لله قاسم محمد محمد', group:'B', section:11, pin:'2301580' },
+  { studentId:'2401258', name:'ملك محمد مغازى محمدابوشعيشع', group:'B', section:12, pin:'2401258' },
+  { studentId:'2401434', name:'احمد محمد ممدوح بكر', group:'B', section:12, pin:'2401434' },
+  { studentId:'2401329', name:'مالك محمد ممدوح حنفي محمود الكيك', group:'B', section:12, pin:'2401329' },
+  { studentId:'2401113', name:'يوسف محمد ناجى محمد', group:'B', section:12, pin:'2401113' },
+  { studentId:'2401385', name:'يمنى محمد ياقوت محمد إسماعيل', group:'B', section:12, pin:'2401385' },
+  { studentId:'2401047', name:'ابراهيم محمود ابراهيم محمد البنا', group:'B', section:12, pin:'2401047' },
+  { studentId:'2401399', name:'مهاب محمود حسن محمود زيدان', group:'B', section:12, pin:'2401399' },
+  { studentId:'2401263', name:'خالد محمود حسين بحيرى حسين', group:'B', section:12, pin:'2401263' },
+  { studentId:'2401054', name:'حبيبه محمود فؤاد ابراهيم ابو حطب', group:'B', section:12, pin:'2401054' },
+  { studentId:'2401270', name:'محمد محمود محمد السيد عبدربه', group:'B', section:12, pin:'2401270' },
+  { studentId:'2401345', name:'جنى علي علي محمد حسن', group:'B', section:12, pin:'2401345' },
+  { studentId:'2401130', name:'نور محمود محمد عليوة احمد', group:'B', section:12, pin:'2401130' },
+  { studentId:'2401211', name:'بسملة محمود محمد محمد السيد', group:'B', section:12, pin:'2401211' },
+  { studentId:'2401048', name:'يوسف محمود محمد محمد قلقيله', group:'B', section:12, pin:'2401048' },
+  { studentId:'2401059', name:'طارق محمود نور الدين احمد شمس الدين', group:'B', section:12, pin:'2401059' },
+  { studentId:'2401361', name:'رنا محمود يحيى مصطفى', group:'B', section:12, pin:'2401361' },
+  { studentId:'2401405', name:'محمد مرسي محمد محمد سليمان', group:'B', section:12, pin:'2401405' },
+  { studentId:'2401223', name:'يوسف مروان خميس رمضان حجاج', group:'B', section:12, pin:'2401223' },
+  { studentId:'2401007', name:'خالد مسعد عبدالحميد محمد احمد', group:'B', section:12, pin:'2401007' },
+  { studentId:'2401226', name:'شهد مسعود قاسم جمعة قاسم', group:'B', section:12, pin:'2401226' },
+  { studentId:'2301434', name:'عمرو ابراهيم فتحى محمد سليمان', group:'B', section:12, pin:'2301434' },
+  { studentId:'2401240', name:'إياد مصطفى حامد عبدالحميد حامد السعدنى', group:'B', section:13, pin:'2401240' },
+  { studentId:'2401251', name:'احمد مصطفى زكريا السيد درويش', group:'B', section:13, pin:'2401251' },
+  { studentId:'2401046', name:'يوسف مصطفى سعيد مصطفى مندور', group:'B', section:13, pin:'2401046' },
+  { studentId:'2401056', name:'رغد مصطفى سليم ناجى دراز', group:'B', section:13, pin:'2401056' },
+  { studentId:'2401274', name:'عبدالرحمن مصطفى صبحى رجب عطا', group:'B', section:13, pin:'2401274' },
+  { studentId:'2401001', name:'سهيلة ممدوح عبده عبدالعال', group:'B', section:13, pin:'2401001' },
+  { studentId:'2401266', name:'ادم ممدوح مصطفي السيد مصطفي', group:'B', section:13, pin:'2401266' },
+  { studentId:'2401146', name:'اسامه مؤمن فتحى حامد عيسى', group:'B', section:13, pin:'2401146' },
+  { studentId:'2401163', name:'ميريام ميخائيل شنوده حبيب شنوده', group:'B', section:13, pin:'2401163' },
+  { studentId:'2401090', name:'مريم ناروز شحاته بولس', group:'B', section:13, pin:'2401090' },
+  { studentId:'2401212', name:'شيرى اشرف يساب فخرى عبيد', group:'B', section:13, pin:'2401212' },
+  { studentId:'2401028', name:'جومانا جورج سعدى شكرى', group:'B', section:13, pin:'2401028' },
+  { studentId:'2401224', name:'ملك حسن السيد حسن السيد', group:'B', section:13, pin:'2401224' },
+  { studentId:'2301444', name:'محمود محمد محمود محمد محمود', group:'B', section:13, pin:'2301444' },
+  { studentId:'2401031', name:'ياسمين نسيم ابراهيم عبدالرحمن الشرم', group:'B', section:13, pin:'2401031' },
+  { studentId:'2401060', name:'محمد نصر الله عبود عبدالعزيز قدافى', group:'B', section:13, pin:'2401060' },
+  { studentId:'2401268', name:'كيرلس نظير جورجى زكى سعد', group:'B', section:13, pin:'2401268' },
+  { studentId:'2401066', name:'محمد هانى احمد عبدالسلام محمد', group:'B', section:13, pin:'2401066' },
+  { studentId:'2401403', name:'نورهان هانى مصطفى محمد', group:'B', section:13, pin:'2401403' },
+  { studentId:'2401180', name:'ابرام هاني خليل فرج رزق', group:'B', section:13, pin:'2401180' },
+  { studentId:'2401064', name:'محمد هشام عبد الواحد حسن الدقدوقى', group:'B', section:13, pin:'2401064' },
+  { studentId:'2401338', name:'عبدالرحمن هشام فتح الله محمد ابوحمص', group:'B', section:13, pin:'2401338' },
+  { studentId:'2401348', name:'خديجة هيثم صلاح الدين محمود اسماعيل', group:'B', section:13, pin:'2401348' },
+  { studentId:'2301373', name:'محمد مجدى فرج ابو السعود', group:'B', section:13, pin:'2301373' },
+  { studentId:'2401246', name:'محمد هيثم محمد علي', group:'B', section:14, pin:'2401246' },
+  { studentId:'2401420', name:'حلا وائل سعيد حسين ابراهيم', group:'B', section:14, pin:'2401420' },
+  { studentId:'2401164', name:'ارسانيوس وجدى راغب توفيق حنا', group:'B', section:14, pin:'2401164' },
+  { studentId:'2401276', name:'مريم وليد ابراهيم سعد قنديل', group:'B', section:14, pin:'2401276' },
+  { studentId:'2401430', name:'عمر وليد طلبة منيسى', group:'B', section:14, pin:'2401430' },
+  { studentId:'2401214', name:'زياد وليد على محمد ابراهيم', group:'B', section:14, pin:'2401214' },
+  { studentId:'2401369', name:'أحمد وليد محمد عبد الله حسنين', group:'B', section:14, pin:'2401369' },
+  { studentId:'2301479', name:'سما حسين كامل محمد عوض', group:'B', section:14, pin:'2301479' },
+  { studentId:'2401304', name:'محمد ياسر توفيق احمد فرج', group:'B', section:14, pin:'2401304' },
+  { studentId:'2401219', name:'احمد ياسر خيرى فرج الحمزاوى', group:'B', section:14, pin:'2401219' },
+  { studentId:'2401156', name:'شهد ياسر على محمد كرد', group:'B', section:14, pin:'2401156' },
+  { studentId:'2401218', name:'مريم ياسر كمال عبد المجيد بهنسى', group:'B', section:14, pin:'2401218' },
+  { studentId:'2401354', name:'شذى ياسر محمد الهنداوى السيد', group:'B', section:14, pin:'2401354' },
+  { studentId:'2401014', name:'ايه ياسر محمد عبد الحافظ رضوان', group:'B', section:14, pin:'2401014' },
+  { studentId:'2401108', name:'نور يحيى ابراهيم محمد', group:'B', section:14, pin:'2401108' },
+  { studentId:'2401253', name:'اسماء يوسف ابراهيم مصطفى مرعى', group:'B', section:14, pin:'2401253' },
+  { studentId:'2301557', name:'غنام احمد عيد الخالدى', group:'B', section:14, pin:'2301557' },
+  { studentId:'2401171', name:'محمد اسامة صالح طولان', group:'B', section:15, pin:'2401171' },
+  { studentId:'2401261', name:'هنا اسلام محمد سعد نمير', group:'B', section:15, pin:'2401261' },
+  { studentId:'2401119', name:'اندريا امير بهجت لبيب', group:'B', section:15, pin:'2401119' },
+  { studentId:'2401294', name:'محمد حسن ابراهيم عبدالمحسن محمود', group:'B', section:15, pin:'2401294' },
+  { studentId:'2401095', name:'معتز خميس محمد عبد السلام هاشم', group:'B', section:15, pin:'2401095' },
+  { studentId:'2401297', name:'عبدالله رمضان محمد حسانين شرف', group:'B', section:15, pin:'2401297' },
+  { studentId:'2401437', name:'اسراء سعد عبدالله عبداللطيف', group:'B', section:15, pin:'2401437' },
+  { studentId:'2401029', name:'عمر سعيد عباس عبدالنبى حميدة', group:'B', section:15, pin:'2401029' },
+  { studentId:'2401148', name:'محمد شوقى محمد عبدالغنى هلل', group:'B', section:15, pin:'2401148' },
+  { studentId:'2401254', name:'رنا صبرى سعد على راضى', group:'B', section:15, pin:'2401254' },
+  { studentId:'2301494', name:'ادهم عبد الحليم حافظ', group:'B', section:15, pin:'2301494' },
+  { studentId:'2301483', name:'مريم السيد حسن السيد حسنين', group:'B', section:15, pin:'2301483' },
+  { studentId:'2401279', name:'محمد صلاح محمد عبدالرحمن ابوسعيفه', group:'B', section:15, pin:'2401279' },
+  { studentId:'2401225', name:'مينا عادل حمام جريس', group:'B', section:15, pin:'2401225' },
+  { studentId:'2401149', name:'ملك عبد الرحمن احمد شوقى محمد مرسال', group:'B', section:15, pin:'2401149' },
+  { studentId:'2401195', name:'انجى عبد الصمد غالب خير', group:'B', section:15, pin:'2401195' },
+  { studentId:'2401213', name:'مريم عبدالباسط عبدالجواد محمد', group:'B', section:15, pin:'2401213' },
+  { studentId:'2401295', name:'جيهان عبدالحليم محمد عبدالحليم عثمان', group:'B', section:15, pin:'2401295' },
+  { studentId:'2401428', name:'زياد عبدالعال عبدالحميد عبدالقادر موسى', group:'B', section:15, pin:'2401428' },
+  { studentId:'2401105', name:'ندا عمر فؤاد حسين زهران', group:'B', section:15, pin:'2401105' },
+  { studentId:'2401006', name:'جابر فارس جابر خليفة زردق', group:'B', section:15, pin:'2401006' },
+  { studentId:'2401034', name:'معاذ محروس محمد شفيق عبد العزيز', group:'B', section:15, pin:'2401034' },
+  { studentId:'2401247', name:'حبيبه محمد حجاج احمد جنيدى', group:'B', section:16, pin:'2401247' },
+  { studentId:'2401016', name:'يحيى محمد سالم محمد الكشير', group:'B', section:16, pin:'2401016' },
+  { studentId:'2401184', name:'منه محمد عبد العزيز دوير', group:'B', section:16, pin:'2401184' },
+  { studentId:'2401094', name:'جنى محمد عبدالعزيز محمد محمود', group:'B', section:16, pin:'2401094' },
+  { studentId:'2401004', name:'مالك محمد كمال عبدالعزيز عبدالرحمن شريف', group:'B', section:16, pin:'2401004' },
+  { studentId:'2401196', name:'شمس محمد محمود عبيد', group:'B', section:16, pin:'2401196' },
+  { studentId:'2401343', name:'جنى محمد مغربي علي محمد القليعي', group:'B', section:16, pin:'2401343' },
+  { studentId:'2401248', name:'نبيل محمد نبيل على العربى', group:'B', section:16, pin:'2401248' },
+  { studentId:'2401375', name:'ابراهيم محمود حسين على', group:'B', section:16, pin:'2401375' },
+  { studentId:'2401290', name:'احمد محمود سعد احمد عبدالعال', group:'B', section:16, pin:'2401290' },
+  { studentId:'2401021', name:'مريم مدحت عيد خليل خضر', group:'B', section:16, pin:'2401021' },
+  { studentId:'2401003', name:'حبيبة عبدالفتاح كمال عبدالفتاح الشيخه', group:'B', section:16, pin:'2401003' },
+  { studentId:'2401107', name:'روضه سعيد احمد اسماعيل عطاالله', group:'B', section:16, pin:'2401107' },
+  { studentId:'2301523', name:'رامز أحمد عبد المعطي أحمد', group:'B', section:16, pin:'2301523' },
+  { studentId:'2401419', name:'مريم مصطفى محمد عبدالمنعم حسين الورداني', group:'B', section:16, pin:'2401419' },
+  { studentId:'2401238', name:'عبدالله مفرح احمد حجو', group:'B', section:16, pin:'2401238' },
+  { studentId:'2401291', name:'صديق هانى حسين صديق عبدالعزيز', group:'B', section:16, pin:'2401291' },
+  { studentId:'2401137', name:'هنا هشام محمد بسيوني الغنيمي', group:'B', section:16, pin:'2401137' },
+  { studentId:'2401127', name:'رنا هشام محمد وجدى عبد الفتاح', group:'B', section:16, pin:'2401127' },
+  { studentId:'2401175', name:'هنا هيثم ابراهيم عثمان شرعان', group:'B', section:16, pin:'2401175' },
+  { studentId:'2401416', name:'مصطفى فوزي عطيه جادالله عيسى', group:'B', section:16, pin:'2401416' },
+  { studentId:'2401306', name:'جودى هيثم السيد حامد السيد', group:'B', section:16, pin:'2401306' },
+  { studentId:'2401070', name:'عمر وليد انورعلى ابوغنيمه', group:'B', section:16, pin:'2401070' },
+  { studentId:'2401349', name:'رنا ياسر رجب محمد عبد الخالق', group:'B', section:16, pin:'2401349' },
+  { studentId:'2401285', name:'ريم جمعة فوزى احمد سمسم', group:'B', section:16, pin:'2401285' },
 ];
-const SEED_ADMIN = { username:'lecturer', password:'lecture2026', name:'Course Lecturer' };
+const SEED_ADMIN = { username:'admin0155', password:'01093748677', name:'Course Admin' };
 
 const CONFIG = {
   QR_ROTATE_MS: 4000,     // how often the lecturer's code changes
   TOLERANCE_MS: 5000,     // max allowed drift between code timestamp and device clock
   REQUIRED_CONFIRMS: 3,
-  OFFLINE_HOLD_MS: 10000, // required offline wait before camera unlocks
 };
 
 /* ---------------- Local (per-device) storage key ----------------
@@ -782,19 +1144,40 @@ const CONFIG = {
 const K = { deviceLocal:'inroom_device_local' };
 if(!localStorage.getItem(K.deviceLocal)) localStorage.setItem(K.deviceLocal, JSON.stringify([]));
 
+// Bumped whenever SEED_STUDENTS changes (new roster, corrections, etc).
+// seedIfEmpty compares this against a marker doc in Firestore, so a
+// roster update actually reaches the live database instead of being
+// silently skipped because the 'students' collection is already
+// non-empty from a previous roster.
+const SEED_VERSION = 'roster-2026-3rd-year-v2-no-demo';
+
 let seedPromise = null;
 async function seedIfEmpty(){
   if(seedPromise) return seedPromise;
   seedPromise = (async ()=>{
-    const studentsSnap = await db.collection('students').limit(1).get();
-    if(studentsSnap.empty){
-      const batch = db.batch();
-      SEED_STUDENTS.forEach(s=>{
-        const ref = db.collection('students').doc(s.studentId);
-        batch.set(ref, s);
-      });
-      await batch.commit();
+    const versionRef = db.collection('_meta').doc('seedVersion');
+    const versionSnap = await versionRef.get();
+    const currentVersion = versionSnap.exists ? versionSnap.data().version : null;
+
+    if(currentVersion !== SEED_VERSION){
+      // Write students in chunks of 400 (Firestore batches cap at 500 ops).
+      for(let i=0; i<SEED_STUDENTS.length; i+=400){
+        const chunk = SEED_STUDENTS.slice(i, i+400);
+        const batch = db.batch();
+        chunk.forEach(s=>{
+          const ref = db.collection('students').doc(s.studentId);
+          batch.set(ref, s, { merge:true });
+        });
+        await batch.commit();
+      }
+      // The seeder only ever adds/merges students — it never deletes ones
+      // dropped from the roster. The demo account used to be seeded here,
+      // so remove it explicitly wherever it was already written to a live
+      // database from an earlier version of this app.
+      await db.collection('students').doc('DEMO-000').delete();
+      await versionRef.set({ version: SEED_VERSION, seededAt: Date.now() });
     }
+
     const adminSnap = await db.collection('admins').doc(SEED_ADMIN.username).get();
     if(!adminSnap.exists){
       await db.collection('admins').doc(SEED_ADMIN.username).set(SEED_ADMIN);
@@ -816,6 +1199,10 @@ const Backend = {
     await seedIfEmpty();
     const snap = await db.collection('students').get();
     return snap.docs.map(d=>d.data());
+  },
+
+  async updateStudentPin(studentId, newPin){
+    await db.collection('students').doc(studentId).update({ pin:newPin });
   },
 
   async authenticateAdmin(username, password){
@@ -967,6 +1354,45 @@ const Auth = {
     return false;
   },
 
+  openChangePin(){
+    document.getElementById('pinCurrent').value='';
+    document.getElementById('pinNew').value='';
+    document.getElementById('pinConfirm').value='';
+    document.getElementById('changePinAlert').innerHTML='';
+    document.getElementById('changePinModal').classList.add('active');
+  },
+  closeChangePin(){
+    document.getElementById('changePinModal').classList.remove('active');
+  },
+  async submitChangePin(){
+    const alertBox = document.getElementById('changePinAlert');
+    alertBox.innerHTML='';
+    const current = document.getElementById('pinCurrent').value.trim();
+    const next = document.getElementById('pinNew').value.trim();
+    const confirm = document.getElementById('pinConfirm').value.trim();
+
+    if(!App.currentStudent){
+      alertBox.innerHTML = `<div class="alert alert-error" style="margin-bottom:16px">You need to be signed in to change your PIN.</div>`;
+      return;
+    }
+    if(current !== App.currentStudent.pin){
+      alertBox.innerHTML = `<div class="alert alert-error" style="margin-bottom:16px">Current PIN is incorrect.</div>`;
+      return;
+    }
+    if(next.length < 4){
+      alertBox.innerHTML = `<div class="alert alert-error" style="margin-bottom:16px">New PIN must be at least 4 characters.</div>`;
+      return;
+    }
+    if(next !== confirm){
+      alertBox.innerHTML = `<div class="alert alert-error" style="margin-bottom:16px">New PIN and confirmation don't match.</div>`;
+      return;
+    }
+    await Backend.updateStudentPin(App.currentStudent.studentId, next);
+    App.currentStudent.pin = next;
+    this.closeChangePin();
+    toast('PIN updated — use it next time you sign in');
+  },
+
   async adminLogin(e){
     e.preventDefault();
     const u = document.getElementById('admUser').value.trim();
@@ -1003,8 +1429,6 @@ refreshNetPill();
    ================================================================ */
 const StudentFlow = {
   active:false,
-  countdownTimer:null,
-  countdownRemaining:0,
   stream:null,
   scanRAF:null,
   confirms:0,
@@ -1024,7 +1448,6 @@ const StudentFlow = {
     document.getElementById('stepConnectivity').style.display='block';
     document.getElementById('stepCamera').style.display='none';
     document.getElementById('stepResult').style.display='none';
-    document.getElementById('countdownArea').style.display='none';
     document.getElementById('startCameraBtn').style.display='none';
     [1,2,3].forEach(i=>{ const d=document.getElementById('cdot'+i); d.classList.remove('hit'); });
     document.getElementById('scanMsg').textContent='Looking for a code…';
@@ -1047,7 +1470,10 @@ const StudentFlow = {
 
   beginConnectivityWatch(){
     this.updateConnUI();
-    if(!navigator.onLine){ this.startCountdown(); }
+    if(!navigator.onLine){
+      // Offline detected — camera unlocks immediately now, no waiting period.
+      document.getElementById('startCameraBtn').style.display='block';
+    }
   },
 
   updateConnUI(){
@@ -1057,11 +1483,11 @@ const StudentFlow = {
     if(navigator.onLine){
       dot.className='status-dot online';
       label.textContent='Still online';
-      sub.textContent='Turn off Wi-Fi and mobile data to begin the 10-second hold';
+      sub.textContent='Turn off Wi-Fi and mobile data to continue';
     }else{
       dot.className='status-dot offline';
       label.textContent='Offline confirmed';
-      sub.textContent='Hold steady while we count down';
+      sub.textContent='You can open the camera now';
     }
   },
 
@@ -1070,10 +1496,10 @@ const StudentFlow = {
     if(this.active && document.getElementById('stepConnectivity').style.display !== 'none'){
       this.updateConnUI();
       if(isOnline){
-        this.cancelCountdown();
+        document.getElementById('startCameraBtn').style.display='none';
         toast('Back online — turn connectivity off again to continue', true);
       }else{
-        this.startCountdown();
+        document.getElementById('startCameraBtn').style.display='block';
       }
       return;
     }
@@ -1091,37 +1517,6 @@ const StudentFlow = {
         }
       });
     }
-  },
-
-  startCountdown(){
-    if(this.countdownTimer) return; // already running
-    document.getElementById('countdownArea').style.display='block';
-    document.getElementById('startCameraBtn').style.display='none';
-    this.countdownRemaining = CONFIG.OFFLINE_HOLD_MS/1000;
-    const ring = document.getElementById('ringBar');
-    const CIRC = 327;
-    const num = document.getElementById('countdownNum');
-    num.textContent = this.countdownRemaining;
-    ring.style.strokeDashoffset = 0;
-    this.countdownTimer = setInterval(()=>{
-      this.countdownRemaining--;
-      num.textContent = Math.max(this.countdownRemaining,0);
-      const pct = 1-(this.countdownRemaining/(CONFIG.OFFLINE_HOLD_MS/1000));
-      ring.style.strokeDashoffset = (CIRC*pct).toFixed(1);
-      if(this.countdownRemaining<=0){
-        clearInterval(this.countdownTimer);
-        this.countdownTimer=null;
-        document.getElementById('countdownArea').style.display='none';
-        const btn = document.getElementById('startCameraBtn');
-        btn.style.display='block';
-        btn.disabled=false;
-      }
-    },1000);
-  },
-  cancelCountdown(){
-    if(this.countdownTimer){ clearInterval(this.countdownTimer); this.countdownTimer=null; }
-    document.getElementById('countdownArea').style.display='none';
-    document.getElementById('startCameraBtn').style.display='none';
   },
 
   async goToCamera(){
@@ -1345,7 +1740,6 @@ const StudentFlow = {
   },
 
   abort(silent){
-    this.cancelCountdown();
     this.stopCamera();
     this.active=false;
     if(!silent) this.finish(false);
