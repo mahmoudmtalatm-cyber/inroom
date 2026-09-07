@@ -221,6 +221,7 @@ a{color:inherit;}
 .status-dot{width:12px;height:12px;border-radius:50%;flex:none;}
 .status-dot.online{background:var(--danger);box-shadow:0 0 0 4px var(--danger-bg);}
 .status-dot.offline{background:var(--success);box-shadow:0 0 0 4px var(--success-bg);}
+.status-dot.pending{background:var(--blue-500);box-shadow:0 0 0 4px var(--blue-100);}
 .status-row .status-text strong{display:block;font-size:14.5px;}
 .status-row .status-text span{font-size:12.5px;color:var(--slate-500);}
 
@@ -442,18 +443,33 @@ a{color:inherit;}
       <div class="step-node" data-step="4">4</div>
     </div>
 
-    <!-- Step 1: connectivity -->
+    <!-- Step 1: calibrate (while still online), then disconnect -->
     <div class="card flow-card" id="stepConnectivity">
-      <h2>Step 1 · Disconnect</h2>
-      <p class="sub">Turn off Wi-Fi and mobile data. This proves the confirmation can't be relayed from someone outside the room.</p>
-      <div class="status-row">
-        <div class="status-dot" id="connDot"></div>
-        <div class="status-text">
-          <strong id="connLabel">Checking connection…</strong>
-          <span id="connSub">Waiting for you to go offline</span>
+      <h2 id="stepConnHeading">Step 1 · Get ready</h2>
+
+      <div id="calibBlock">
+        <p class="sub">Stay online for a moment while your device syncs its clock with the server.</p>
+        <div class="status-row">
+          <div class="status-dot pending" id="calibDot"></div>
+          <div class="status-text">
+            <strong id="calibLabel">Syncing clock…</strong>
+            <span id="calibSub">This only takes a second</span>
+          </div>
         </div>
+        <button class="btn btn-secondary btn-block" id="calibRetryBtn" style="display:none;margin-top:8px" onclick="StudentFlow.runCalibration()">Retry</button>
       </div>
-      <button class="btn btn-primary btn-block" id="startCameraBtn" style="display:none;margin-top:8px" onclick="StudentFlow.goToCamera()">Open camera</button>
+
+      <div id="disconnectBlock" style="display:none">
+        <p class="sub">Now turn off Wi-Fi and mobile data. This proves the confirmation can't be relayed from someone outside the room.</p>
+        <div class="status-row">
+          <div class="status-dot" id="connDot"></div>
+          <div class="status-text">
+            <strong id="connLabel">Checking connection…</strong>
+            <span id="connSub">Waiting for you to go offline</span>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" id="startCameraBtn" style="display:none;margin-top:8px" onclick="StudentFlow.goToCamera()">Open camera</button>
+      </div>
     </div>
 
     <!-- Step 2/3: camera -->
@@ -1160,6 +1176,42 @@ seedIfEmpty().catch(err=>{
    here. This is the Firestore implementation; the localStorage
    version it replaced had the exact same method names/shapes.
    ================================================================ */
+/* ---------------- Clock calibration ----------------
+   A single honest round trip against Firestore's own server clock,
+   done once per session while the device is still online. From then
+   on this device can compute "real" (server-accurate) time entirely
+   offline — Clock.now() is just Date.now() shifted by a fixed offset
+   measured here — without ever needing to trust the device's own
+   clock setting, or the other side's self-reported timestamps. */
+const Clock = {
+  offset: undefined,       // serverTime - localTime, once calibrated
+  calibratedAt: undefined,
+
+  async calibrate(){
+    const t0 = Date.now();
+    const ref = await db.collection('_clockSync').add({
+      t: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    const snap = await ref.get({ source:'server' });
+    const t1 = Date.now();
+    const serverMs = snap.data().t.toMillis();
+    // Use the midpoint of the round trip as our best guess of "when"
+    // the server actually saw us, which cancels out most of the
+    // network latency instead of assuming a one-way delay.
+    const localMidpoint = (t0 + t1) / 2;
+    this.offset = serverMs - localMidpoint;
+    this.calibratedAt = Date.now();
+    ref.delete().catch(()=>{}); // best-effort cleanup, not required for correctness
+    return this.offset;
+  },
+
+  ready(){ return this.offset !== undefined; },
+
+  now(){
+    return this.ready() ? Date.now() + this.offset : Date.now();
+  },
+};
+
 const Backend = {
   async getStudents(){
     await seedIfEmpty();
@@ -1453,17 +1505,55 @@ const StudentFlow = {
     this.usedNonces = new Set();
     this.lockedSessionId = null;
     this.lockedGroup = null;
-    this.clockOffset = undefined;
-    this.firstSeenAt = undefined;
     this.setStep(1);
     document.getElementById('stepConnectivity').style.display='block';
     document.getElementById('stepCamera').style.display='none';
     document.getElementById('stepResult').style.display='none';
     document.getElementById('startCameraBtn').style.display='none';
+    document.getElementById('disconnectBlock').style.display='none';
+    document.getElementById('calibBlock').style.display='block';
+    document.getElementById('calibRetryBtn').style.display='none';
     [1,2,3].forEach(i=>{ const d=document.getElementById('cdot'+i); d.classList.remove('hit'); });
     document.getElementById('scanMsg').textContent='Looking for a code…';
     document.getElementById('scanMsg').className='scan-msg';
-    this.beginConnectivityWatch();
+    this.runCalibration();
+  },
+
+  // Step 1a — while still online, get one honest server-time round trip
+  // before anything else can proceed. This has to happen *before* the
+  // student is told to disconnect: it's the only source of truth the
+  // freshness check will use later, and it needs a live network call.
+  async runCalibration(){
+    const dot = document.getElementById('calibDot');
+    const label = document.getElementById('calibLabel');
+    const sub = document.getElementById('calibSub');
+    const retryBtn = document.getElementById('calibRetryBtn');
+    dot.className='status-dot pending';
+    label.textContent='Syncing clock…';
+    sub.textContent='This only takes a second';
+    retryBtn.style.display='none';
+
+    if(!navigator.onLine){
+      dot.className='status-dot online';
+      label.textContent='You need to be online for this step';
+      sub.textContent='Reconnect briefly, then try again';
+      retryBtn.style.display='block';
+      return;
+    }
+
+    try{
+      await Clock.calibrate();
+      dot.className='status-dot offline';
+      label.textContent='Clock synced';
+      sub.textContent='You can turn off the internet now';
+      document.getElementById('disconnectBlock').style.display='block';
+      this.beginConnectivityWatch();
+    }catch(e){
+      dot.className='status-dot online';
+      label.textContent='Could not sync clock';
+      sub.textContent='Check your connection and try again';
+      retryBtn.style.display='block';
+    }
   },
 
   setStep(n){
@@ -1503,8 +1593,11 @@ const StudentFlow = {
   },
 
   onNetChange(isOnline){
-    // Only relevant during the connectivity step
-    if(this.active && document.getElementById('stepConnectivity').style.display !== 'none'){
+    // Only relevant once calibration has finished and the disconnect
+    // instructions are actually showing — going online/offline while
+    // still on the calibration sub-step is handled by runCalibration
+    // itself, not here.
+    if(this.active && document.getElementById('disconnectBlock').style.display !== 'none'){
       this.updateConnUI();
       if(isOnline){
         document.getElementById('startCameraBtn').style.display='none';
@@ -1646,33 +1739,26 @@ const StudentFlow = {
     if(payload.sid !== this.lockedSessionId) return; // ignore unrelated codes
     if(this.usedNonces.has(payload.n)) return; // already counted this exact code
 
-    // Anti-replay/staleness check, made robust to clock skew between the
-    // lecturer's laptop and the student's phone. Comparing raw wall clocks
-    // (Date.now() on each device) fails whenever the two clocks disagree by
-    // more than a few seconds, which is common and has nothing to do with
-    // whether the code is actually stale. Instead we measure elapsed time
-    // on each side of this device's own scan session and compare deltas:
-    // "how much time has passed since I started scanning" vs "how much
-    // time had passed on the lecturer's clock since this code's timestamp
-    // relative to the first code I saw." This only needs each device's
-    // clock to run at a consistent rate, not to agree on absolute time.
-    if(this.clockOffset === undefined){
-      // First code seen this session: anchor our offset estimate here.
-      // From this point on we track drift *relative to this anchor*,
-      // not absolute wall-clock agreement.
-      this.clockOffset = Date.now() - payload.ts;
-      this.firstSeenAt = Date.now();
-    } else {
-      const expectedTs = Date.now() - this.clockOffset;
-      const drift = Math.abs(expectedTs - payload.ts);
-      // Allow slack for QR rotation + camera/decode lag on top of the
-      // configured tolerance, since this is now measuring relative drift
-      // (should stay tiny) rather than absolute clock agreement.
-      if(drift > CONFIG.TOLERANCE_MS){
-        msg.textContent = 'Code read, but it expired before your device saw it — keep the camera steady.';
-        msg.className='scan-msg warn';
-        return;
-      }
+    // Anti-replay/staleness check against a real clock. Both this device
+    // and the lecturer's device calibrated their own offset from the
+    // server independently (see Clock.calibrate) before this session
+    // started, so payload.ts and Clock.now() are both honest estimates
+    // of server time — no self-reported anchor, no trusting the other
+    // device's local clock, and it works fully offline since Clock.now()
+    // is just Date.now() shifted by an offset measured earlier.
+    if(!Clock.ready()){
+      // Shouldn't happen — calibration is required before the camera
+      // step unlocks — but fail safe rather than silently trusting an
+      // unverified timestamp.
+      msg.textContent = 'Clock not synced — please restart the check-in.';
+      msg.className='scan-msg warn';
+      return;
+    }
+    const drift = Math.abs(Clock.now() - payload.ts);
+    if(drift > CONFIG.TOLERANCE_MS){
+      msg.textContent = 'Code read, but it expired before your device saw it — keep the camera steady.';
+      msg.className='scan-msg warn';
+      return;
     }
 
     // Valid confirm
@@ -1827,11 +1913,18 @@ const AdminUI = {
     });
   },
 
-  enterLive(session){
+  async enterLive(session){
     this.liveSession = session;
     document.getElementById('liveTitle').textContent = session.title;
     document.getElementById('liveMeta').textContent = `Group ${session.group} · started ${fmtTime(session.startedAt)}`;
     Nav.go('adminLive');
+    // Calibrate this device's clock against the same server clock
+    // students calibrate against, so the ts stamped on every QR code is
+    // an honest server-time estimate rather than this laptop's local
+    // clock — the freshness check on the student side means nothing
+    // otherwise. The lecturer's device stays online for the whole
+    // session, so this can just be re-run if it ever fails.
+    try{ await Clock.calibrate(); }catch(e){ /* renderQr() falls back to local time below */ }
     this.startQrLoop();
     this.refreshLiveRoster();
     this._rosterInterval = setInterval(()=>this.refreshLiveRoster(), 2000);
@@ -1861,7 +1954,7 @@ const AdminUI = {
     const payload = {
       sid: this.liveSession.id,
       g: this.liveSession.group,
-      ts: Date.now(),
+      ts: Clock.now(),
       n: Math.random().toString(36).slice(2,10),
     };
     const holder = document.getElementById('qrcode-holder');
